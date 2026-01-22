@@ -1,0 +1,129 @@
+# Daily Tasker - Git Ignore File
+# ================================
+
+# CRITICAL: Never commit these files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+env.bak/
+venv.bak/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+tasker.db
+instance/
+
+# Generated PDFs
+*.pdf
+dailyTasker_*.pdf
+shared_*.pdf
+!docs/*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Desktop.ini
+$RECYCLE.BIN/
+
+# Flask
+instance/
+.webassets-cache
+.flask_session/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# pyenv
+.python-version
+
+# Backup files
+*.bak
+*.backup
+*_backup_*
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Railway
+.railway/
+
+# Render
+.render/
+
+# Security - Never commit these!
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.txt
+credentials.json
+
+# Local development
+local_settings.py
+.env.development.local
+.env.production.local
