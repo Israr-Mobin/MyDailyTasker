@@ -1,49 +1,50 @@
 """
-Daily Task Management
-=====================
-Utilities for creating and managing daily task instances.
-
-DailyTask records are generated automatically when users view a date,
-ensuring that all master tasks have corresponding daily entries.
+Daily Task Management - WITH PROPER HISTORY TRACKING
+=====================================================
+Uses Task.created_at to ensure tasks only appear from creation date forward.
 """
 
 from datetime import date, timedelta
-from models import db, Task, DailyTask
+from models import db, Task, DailyTask, Category
 
 
 def ensure_daily_tasks(user_id, selected_date):
     """
-    Ensure DailyTask records exist for all user tasks on a given date.
+    Ensure DailyTask records exist for tasks that should appear on this date.
     
-    Creates missing DailyTask entries by comparing the user's master
-    task list with existing daily tasks for the date.
+    CRITICAL: Only creates DailyTask for tasks that:
+    1. Were created on or before selected_date (created_at.date() <= selected_date)
+    2. Are not deleted, OR were deleted after selected_date
     
     Args:
         user_id (int): User's database ID
         selected_date (date): Date to ensure tasks for
-    
-    This function is idempotent - safe to call multiple times.
     """
-    # Get all master tasks for user
-    tasks = Task.query.filter_by(user_id=user_id).all()
+    # Get tasks that should appear on this date
+    tasks = Task.get_active_tasks_for_date(user_id, selected_date)
 
     # Get existing daily tasks for this date
-    existing = {
+    existing_task_ids = {
         dt.task_id
         for dt in DailyTask.query.filter_by(
             user_id=user_id,
             date=selected_date
         ).all()
+        if dt.task_id is not None
     }
 
-    # Create missing daily tasks
+    # Create missing daily tasks with snapshot data
     for task in tasks:
-        if task.id not in existing:
+        if task.id not in existing_task_ids:
             daily = DailyTask(
                 user_id=user_id,
                 task_id=task.id,
                 date=selected_date,
-                completed=False
+                completed=False,
+                # SNAPSHOT FIELDS
+                task_title=task.title,
+                task_duration=task.duration,
+                category_name=task.category.name
             )
             db.session.add(daily)
 
@@ -54,15 +55,47 @@ def ensure_daily_tasks_range(user_id, start_date, end_date):
     """
     Ensure DailyTask records exist for a date range.
     
-    Useful for pre-generating daily tasks for monthly or weekly views
-    to minimize database queries.
-    
     Args:
         user_id (int): User's database ID
-        start_date (date): Start of date range (inclusive)
-        end_date (date): End of date range (inclusive)
+        start_date (date): Start of range (inclusive)
+        end_date (date): End of range (inclusive)
     """
     current = start_date
     while current <= end_date:
         ensure_daily_tasks(user_id, current)
         current += timedelta(days=1)
+
+
+# def get_daily_tasks_grouped_by_category(user_id, selected_date):
+#     """
+#     Get daily tasks for a date, grouped by category.
+    
+#     Uses snapshot data from DailyTask records.
+    
+#     Args:
+#         user_id (int): User's database ID
+#         selected_date (date): Date to get tasks for
+        
+#     Returns:
+#         dict: {category_name: [DailyTask objects]}
+#     """
+#     # Ensure tasks exist for this date
+#     ensure_daily_tasks(user_id, selected_date)
+    
+#     # Get all daily tasks for this date
+#     daily_tasks = DailyTask.query.filter_by(
+#         user_id=user_id,
+#         date=selected_date
+#     ).order_by(DailyTask.category_name, DailyTask.task_title).all()
+    
+#     # Group by category name (from snapshot)
+#     grouped = {}
+#     for dt in daily_tasks:
+#         category = dt.category_name
+#         if category not in grouped:
+#             grouped[category] = []
+#         grouped[category].append(dt)
+    
+#     return grouped
+
+

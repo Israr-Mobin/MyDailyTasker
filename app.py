@@ -36,8 +36,16 @@ from pdf.pdf_generator import (
 
 from models import db, User, Task, DailyTask, Category, ShareToken, Badge
 
+from utils.task_routes import (
+    soft_delete_task_route,
+    restore_task_route,
+    permanently_delete_task_route,
+    get_deleted_tasks_route,
+    update_retention_settings_route,
+    cleanup_expired_deleted_tasks
+)
+
 # Utility Helpers
-from utils.stats import daily_completion, weekly_completion, monthly_completion
 from utils.badges import award_badges
 from utils.streaks import compute_current_streak
 from utils.tasks import ensure_daily_tasks
@@ -189,6 +197,14 @@ scheduler.add_job(
     replace_existing=True
 )
 
+scheduler.add_job(
+    cleanup_expired_deleted_tasks,
+    trigger="interval",
+    hours=24,
+    id="cleanup_deleted_tasks",
+    replace_existing=True
+)
+
 
 def start_scheduler():
     """Start the scheduler only in the main process (not reloader)."""
@@ -299,8 +315,8 @@ def logout():
 @login_required
 def dashboard():
     """
-    Main dashboard view.
-    Displays tasks, progress stats, streaks, and badges for selected date.
+    Main dashboard view with date navigation.
+    Supports arrow navigation + History modal for specific dates.
     """
     # Parse date from query params or use today
     date_str = request.args.get("date")
@@ -312,23 +328,27 @@ def dashboard():
     # Ensure daily tasks exist for this date
     ensure_daily_tasks(current_user.id, selected_date)
 
-    # Fetch categories and tasks
+    # Get ALL categories
     categories = Category.query.filter_by(user_id=current_user.id).all()
-    tasks_by_category = {
-        c: Task.query.filter_by(
-            user_id=current_user.id,
-            category_id=c.id
-        ).all()
-        for c in categories
-    }
 
-    # Fetch daily task completion status
-    daily_tasks = {
-        dt.task_id: dt
-        for dt in DailyTask.query.filter_by(
-            user_id=current_user.id,
-            date=selected_date
-        ).all()
+    # Get daily tasks for selected date
+    daily_tasks_list = DailyTask.query.filter_by(
+        user_id=current_user.id,
+        date=selected_date
+    ).order_by(DailyTask.category_name, DailyTask.task_title).all()
+    
+    # Group by category_name
+    tasks_by_category_name = {}
+    for dt in daily_tasks_list:
+        cat_name = dt.category_name
+        if cat_name not in tasks_by_category_name:
+            tasks_by_category_name[cat_name] = []
+        tasks_by_category_name[cat_name].append(dt)
+
+    # Create daily_tasks dict
+    daily_tasks_dict = {
+        dt.id: dt
+        for dt in daily_tasks_list
     }
 
     # Calculate statistics
@@ -338,8 +358,8 @@ def dashboard():
 
     return render_template(
         "dashboard.html",
-        tasks_by_category=tasks_by_category,
-        daily_tasks=daily_tasks,
+        tasks_by_category=tasks_by_category_name,
+        daily_tasks=daily_tasks_dict,
         selected_date=selected_date,
         timedelta=timedelta,
         categories=categories,
@@ -361,7 +381,7 @@ def dashboard():
 # ====================
 @app.route("/add-task", methods=["POST"])
 @login_required
-@limiter.limit("50 per minute")  # Increased - adding tasks is normal
+@limiter.limit("50 per minute")  
 def add_task():
     """
     Create a new task.
@@ -406,62 +426,190 @@ def update_daily_tasks():
     Update daily task completion status or delete tasks.
     Handles both marking tasks as complete and deleting tasks.
     """
-    selected_date = datetime.strptime(
-        request.form["selected_date"],
-        "%Y-%m-%d"
-    ).date()
-
+    from datetime import datetime
+    
+    selected_date_str = request.form.get("selected_date")
+    selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+    
     action = request.form.get("action")
-
-    # Save completion status
+    
     if action == "save":
-        completed_task_ids = set(map(
-            int,
-            request.form.getlist("completed_tasks")
-        ))
-
+        # Now we get DailyTask IDs (not Task IDs)
+        completed_daily_task_ids = set(request.form.getlist("completed_tasks"))
+        
+        # Get all daily tasks for this date
         daily_tasks = DailyTask.query.filter_by(
             user_id=current_user.id,
             date=selected_date
         ).all()
-
-        for daily in daily_tasks:
-            daily.completed = daily.task_id in completed_task_ids
-
+        
+        # Update completion status using DailyTask.id
+        for dt in daily_tasks:
+            dt.completed = str(dt.id) in completed_daily_task_ids
+        
         db.session.commit()
+
+        # Award badge
+        streak = compute_current_streak(current_user.id, selected_date)
+        total_completed = DailyTask.query.filter_by(
+            user_id=current_user.id, completed=True
+        ).count()
+        weekly_pct = get_dashboard_stats(current_user.id, selected_date)["weekly_percent"]
+
+        award_badges(current_user.id, {
+            "total_completed": total_completed,
+            "current_streak": streak,
+            "weekly_percent": weekly_pct
+        })
+
         flash("Progress saved!")
-
-    # Delete task
-    elif action == "delete":
-        delete_task_id = int(request.form["delete_tasks"])
-
-        task = Task.query.filter_by(
-            id=delete_task_id,
-            user_id=current_user.id
-        ).first()
-
-        if task:
-            db.session.delete(task)
-            db.session.commit()
-            flash("Task deleted successfully!")
-        else:
-            flash("Task not found.")
-
-    # Award badges based on progress
-    stats = get_dashboard_stats(current_user.id, selected_date)
-    award_badges(
-        current_user.id,
-        {
-            "total_completed": DailyTask.query.filter_by(
-                user_id=current_user.id,
-                completed=True
-            ).count(),
-            "current_streak": compute_current_streak(current_user.id, selected_date),
-            "weekly_percent": stats["weekly_percent"]
-        }
-    )
-
+    
     return redirect(url_for("dashboard", date=selected_date))
+
+@app.route("/task/soft-delete", methods=["POST"])
+@login_required
+def soft_delete_task():
+    return soft_delete_task_route()
+
+@app.route("/task/restore", methods=["POST"])
+@login_required
+def restore_task():
+    return restore_task_route()
+
+@app.route("/task/permanent-delete", methods=["POST"])
+@login_required
+def permanently_delete_task():
+    return permanently_delete_task_route()
+
+@app.route("/tasks/deleted", methods=["GET"])
+@login_required
+def get_deleted_tasks():
+    return get_deleted_tasks_route()
+
+@app.route("/settings/retention", methods=["POST"])
+@login_required
+def update_retention_settings():
+    return update_retention_settings_route()
+
+
+# Keep the History modal routes as well
+@app.route("/history/<date_str>")
+@login_required
+def view_history_date(date_str):
+    """
+    View a specific historical date via History modal.
+    """
+    from datetime import datetime, date
+    from models import DailyTask
+    from utils.tasks import ensure_daily_tasks
+    
+    try:
+        selected_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date format")
+        return redirect(url_for("dashboard"))
+    
+    # Can't view future dates
+    if selected_date > date.today():
+        flash("Cannot view future dates")
+        return redirect(url_for("dashboard"))
+    
+    # Ensure daily tasks exist
+    ensure_daily_tasks(current_user.id, selected_date)
+    
+    # Get daily tasks
+    daily_tasks_list = DailyTask.query.filter_by(
+        user_id=current_user.id,
+        date=selected_date
+    ).order_by(DailyTask.category_name, DailyTask.task_title).all()
+    
+    # Group by category
+    tasks_by_category_name = {}
+    for dt in daily_tasks_list:
+        cat_name = dt.category_name
+        if cat_name not in tasks_by_category_name:
+            tasks_by_category_name[cat_name] = []
+        tasks_by_category_name[cat_name].append(dt)
+    
+    from flask import jsonify
+    
+    return jsonify({
+        'date': selected_date.strftime('%Y-%m-%d'),
+        'date_display': selected_date.strftime('%B %d, %Y'),
+        'tasks_by_category': {
+            cat_name: [
+                {
+                    'id': dt.id,
+                    'task_id': dt.task_id,
+                    'title': dt.task_title,
+                    'duration': dt.task_duration,
+                    'completed': dt.completed
+                }
+                for dt in tasks
+            ]
+            for cat_name, tasks in tasks_by_category_name.items()
+        }
+    })
+
+
+# Delete task from dashboard (handles both today and past dates)
+@app.route("/task/delete-from-date", methods=["POST"])
+@login_required
+def delete_task_from_dashboard():
+    """Delete a task from the dashboard."""
+    from datetime import datetime, date
+    
+    task_id = request.form.get("task_id", type=int)
+    date_str = request.form.get("date")
+    
+    if not task_id or not date_str:
+        flash("Invalid request")
+        return redirect(url_for("dashboard"))
+    
+    try:
+        deletion_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date")
+        return redirect(url_for("dashboard"))
+    
+    task = Task.query.filter_by(
+        id=task_id,
+        user_id=current_user.id
+    ).first()
+    
+    if not task:
+        flash("Task not found")
+        return redirect(url_for("dashboard", date=date_str))
+    
+    task_title = task.title
+    
+    # Soft delete
+    if deletion_date >= date.today():
+        task.soft_delete()
+    else:
+        deletion_datetime = datetime.combine(deletion_date, datetime.min.time())
+        task.deleted_at = deletion_datetime
+    
+    # CRITICAL: Delete ALL DailyTask records from deletion_date onward
+    future_dailies = DailyTask.query.filter(
+        DailyTask.task_id == task_id,
+        DailyTask.user_id == current_user.id,
+        DailyTask.date >= deletion_date
+    ).all()
+    
+    for daily in future_dailies:
+        db.session.delete(daily)
+    
+    db.session.commit()
+    
+    if deletion_date >= date.today():
+        flash(f"Task '{task_title}' removed. Restore from Recently Deleted.")
+    else:
+        flash(f"Task '{task_title}' removed from {deletion_date.strftime('%B %d, %Y')} onward.")
+    
+    return redirect(url_for("dashboard", date=date_str))
+
+
 
 
 # ====================

@@ -126,6 +126,33 @@ body {
     background: var(--bg-color);
 }
 
+* Menu view container */
+.menu-view {
+    /* No special styling needed - uses existing dropdown-item styles */
+}
+
+/* Arrow indicator for items with submenus */
+.dropdown-item .submenu-arrow {
+    float: right;
+    font-size: 18px;
+    color: #999;
+    margin-left: 8px;
+}
+
+/* Optional: Add a subtle animation when switching views */
+.menu-view {
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
 /* Modal Overlay */
 .modal-overlay {
     display: none;

@@ -4,6 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Tasker Dashboard</title>
+    <!-- Favicon: SVG for modern browsers, ICO fallback for old ones -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/logo.svg') }}">
+    <link rel="icon" type="image/x-icon"  href="{{ url_for('static', filename='images/favicon.ico') }}">
+    <link rel="apple-touch-icon"          href="{{ url_for('static', filename='images/logo.png') }}">
+
+    <!-- Open Graph: controls previews on Google, WhatsApp, Twitter etc -->
+    <meta property="og:title"       content="MyDailyTasker">
+    <meta property="og:description" content="Track your daily habits and tasks">
+    <meta property="og:image"       content="https://mydailytasker.com/static/images/og-image.png">
+    <meta property="og:url"         content="https://mydailytasker.com">
+    <meta property="og:type"        content="website">
+
+    <!-- Twitter/X uses these separately -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="MyDailyTasker">
+    <meta name="twitter:description" content="Track your daily habits and tasks">
+    <meta name="twitter:image"       content="https://mydailytasker.com/static/images/og-image.png">
 
     <!-- Inline script to apply theme BEFORE page renders (prevents flash) -->
     <script>
@@ -39,18 +56,48 @@
         <div class="top-bar-right">
             <button class="menu-btn" onclick="toggleMenu()">⋮</button>
             <div class="dropdown" id="mainMenu">
-                <div class="dropdown-item" onclick="openProfileModal()">👤 Profile</div>
-                <div class="dropdown-item" onclick="openThemeModal()">🎨 Themes</div>
-                <div class="dropdown-item" onclick="openSettingsModal()">⚙️ Settings</div>
-                <div class="dropdown-item" onclick="showTutorial()">❓ Help</div>
-                <div class="dropdown-item" onclick="window.location.href='{{ url_for('logout') }}'">🚪 Logout</div>
+                <!-- Main Menu View -->
+                <div class="menu-view" id="mainMenuView">
+                    <div class="dropdown-item" onclick="openProfileModal();">
+                        👤 Profile
+                    </div>
+                    <div class="dropdown-item" onclick="showMenuView('historyMenu')">
+                        📅 History
+                        <span class="submenu-arrow">›</span>
+                    </div>
+                    <div class="dropdown-item" onclick="showMenuView('settingsMenu')">
+                        ⚙️ Settings
+                        <span class="submenu-arrow">›</span>
+                    </div>
+                </div>
+                
+                <!-- History Submenu View -->
+                <div class="menu-view" id="historyMenu" style="display: none;">
+                    <div class="dropdown-item" onclick="openHistoryModal();">
+                        📅 View Calendar
+                    </div>
+                    <div class="dropdown-item" onclick="openInactiveTasksModal();">
+                        🗑️ Recently Deleted
+                    </div>
+                </div>
+                
+                <!-- Settings Submenu View -->
+                <div class="menu-view" id="settingsMenu" style="display: none;">
+                    <div class="dropdown-item" onclick="openSettingsModal();">
+                        📧 Email Reminders
+                    </div>
+                    <div class="dropdown-item" onclick="openThemeModal();">
+                        🎨 Themes
+                    </div>
+                    <div class="dropdown-item" onclick="showTutorial();">
+                        ❓ Help
+                    </div>
+                    <div class="dropdown-item" onclick="window.location.href='{{ url_for('logout') }}'">
+                        🚪 Logout
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-
-    <!-- Floating Navigation Buttons -->
-    <div class="floating-nav left">
-        <a href="{{ url_for('dashboard', date=(selected_date - timedelta(days=1))) }}" class="nav-btn" title="Previous day">◀</a>
     </div>
     
     <!-- Today Button (centered at bottom) -->
@@ -60,10 +107,6 @@
         <a href="{{ url_for('dashboard') }}" class="today-btn" title="Jump to today">📅 Today</a>
     </div>
     {% endif %}
-    
-    <div class="floating-nav right">
-        <a href="{{ url_for('dashboard', date=(selected_date + timedelta(days=1))) }}" class="nav-btn" title="Next day">▶</a>
-    </div>
 
     <!-- Main Content -->
     <div class="container">
@@ -78,11 +121,20 @@
             {% endif %}
         {% endwith %}
 
+        <!-- Floating Navigation Buttons -->
+        <div class="floating-nav left">
+            <a href="{{ url_for('dashboard', date=(selected_date - timedelta(days=1))) }}" class="nav-btn" title="Previous day">◀</a>
+        </div>
+
         <!-- Date Header -->
         <div class="date-header">
             <h1>Hello, {{ current_user.name }}! 👋</h1>
             <p style="font-size: 18px; margin: 8px 0; font-weight: 500;">{{ selected_date.strftime("%A, %B %d, %Y") }}</p>
             <p class="date-subtext">💡 Tip: Long-press a task to delete it</p>
+        </div>
+
+        <div class="floating-nav right">
+            <a href="{{ url_for('dashboard', date=(selected_date + timedelta(days=1))) }}" class="nav-btn" title="Next day">▶</a>
         </div>
 
         <!-- Progress Section -->
@@ -123,26 +175,28 @@
         <form method="POST" action="{{ url_for('update_daily_tasks') }}" id="tasksForm">
             <input type="hidden" name="selected_date" value="{{ selected_date }}">
             
-            {% for category, tasks in tasks_by_category.items() %}
-                {% if tasks %}
+            {% for category_name, daily_tasks_list in tasks_by_category.items() %}
+                {% if daily_tasks_list %}
                     <div class="category-block">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <h3 class="category-title" style="margin: 0; border: none; padding: 0;">{{ category.name }}</h3>
-                            <button class="category-delete-btn" onclick="deleteCategory({{ category.id }}, '{{ category.name }}')" title="Delete category">🗑️</button>
+                            <h3 class="category-title" style="margin: 0; border: none; padding: 0;">{{ category_name }}</h3>
+                            {# Category delete button only for current/future dates #}
                         </div>
-                        {% for task in tasks %}
-                            {% set daily = daily_tasks.get(task.id) %}
-                            <div class="task-item" data-task-id="{{ task.id }}">
+                        {% for daily_task in daily_tasks_list %}
+                            <div class="task-item" 
+                                data-daily-task-id="{{ daily_task.id }}"
+                                data-task-id="{{ daily_task.task_id or '' }}">
                                 <label>
-                                    <input type="checkbox" name="completed_tasks" value="{{ task.id }}"
-                                        {% if daily and daily.completed %}checked{% endif %}>
-                                    <span>{{ task.title }} {% if task.duration %}({{ task.duration }}){% endif %}</span>
+                                    <input type="checkbox" name="completed_tasks" value="{{ daily_task.id }}"
+                                        {% if daily_task.completed %}checked{% endif %}>
+                                    <span>{{ daily_task.task_title }} {% if daily_task.task_duration %}({{ daily_task.task_duration }}){% endif %}</span>
                                 </label>
                             </div>
                         {% endfor %}
                     </div>
                 {% endif %}
             {% endfor %}
+
 
             <!-- Save Button -->
             <button type="submit" name="action" value="save" class="btn" style="width: 100%; margin-top: 16px;">💾 Save Progress</button>
@@ -275,6 +329,102 @@
                 </label>
                 <button type="button" class="btn btn-secondary" onclick="skipTutorial()">Skip</button>
                 <button type="button" class="btn" onclick="nextTutorialStep()" id="tutorialNextBtn">Next</button>
+            </div>
+        </div>
+
+        <!-- Recently Inactive Modal -->
+        <div class="modal" id="inactiveTasksModal" onclick="event.stopPropagation()" style="display: none;">
+            <span class="modal-close" onclick="closeAllModals()">×</span>
+            <h3>🔄 Recently Deactivated</h3>
+            
+            <p style="margin-bottom: 16px; font-size: 14px; color: var(--text-color);">
+                Tasks deactivated within the last <strong id="retentionDays">7</strong> days can be reactivated.
+                After that, they'll be permanently removed.
+            </p>
+            
+            <!-- Loading State -->
+            <div id="inactiveTasksLoading" style="text-align: center; padding: 20px;">
+                <p>Loading inactive tasks...</p>
+            </div>
+            
+            <!-- Empty State -->
+            <div id="inactiveTasksEmpty" style="display: none; text-align: center; padding: 20px;">
+                <p style="color: #666;">No recently deactivated tasks</p>
+                <p style="font-size: 13px; margin-top: 8px;">
+                    Deactivated tasks will appear here for <span id="retentionDays2">7</span> days
+                </p>
+            </div>
+            
+            <!-- Tasks List -->
+            <div id="inactiveTasksList" style="display: none;">
+                <!-- Tasks will be inserted here by JavaScript -->
+            </div>
+            
+            <!-- Retention Settings -->
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                <form method="POST" action="{{ url_for('update_retention_settings') }}">
+                    <div class="form-group">
+                        <label style="font-size: 14px;">Keep deactivated tasks for:</label>
+                        <select name="retention" autocomplete="off" 
+                                style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-color); color: var(--text-color);"
+                                onchange="this.form.submit()">
+                            <option value="7" {% if current_user.deleted_tasks_retention == 7 %}selected{% endif %}>7 days</option>
+                            <option value="30" {% if current_user.deleted_tasks_retention == 30 %}selected{% endif %}>30 days</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- History Modal -->
+        <div class="modal" id="historyModal" onclick="event.stopPropagation()" style="display: none;">
+            <span class="modal-close" onclick="closeAllModals()">×</span>
+            <h3>📅 History</h3>
+            
+            <p style="margin-bottom: 16px; font-size: 14px; color: var(--text-color);">
+                View your past task history. Select a date to see what tasks you had that day.
+            </p>
+            
+            <!-- Date Picker -->
+            <div style="margin-bottom: 20px;">
+                <label style="font-size: 14px; display: block; margin-bottom: 8px;">Select Date:</label>
+                <input type="date" 
+                    id="historyDatePicker" 
+                    max="{{ date.today().strftime('%Y-%m-%d') }}"
+                    style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-color); color: var(--text-color);"
+                    onchange="loadHistoryDate(this.value)">
+            </div>
+            
+            <!-- Loading State -->
+            <div id="historyLoading" style="display: none; text-align: center; padding: 20px;">
+                <p>Loading...</p>
+            </div>
+            
+            <!-- History Content -->
+            <div id="historyContent" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color);">
+                    <h4 id="historyDateDisplay" style="margin: 0; font-size: 16px;">Date</h4>
+                    <button onclick="clearHistorySelection()" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">
+                        ← Back to Calendar
+                    </button>
+                </div>
+                
+                <!-- Tasks by Category -->
+                <div id="historyTasksList"></div>
+                
+                <!-- Action Buttons -->
+                <div style="margin-top: 20px; display: flex; gap: 8px;">
+                    <button onclick="saveHistoryChanges()" class="btn" style="flex: 1;">
+                        💾 Save Changes
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Empty State -->
+            <div id="historyEmpty" style="display: none; text-align: center; padding: 40px; color: #666;">
+                <p style="font-size: 48px; margin-bottom: 8px;">📅</p>
+                <p>No tasks found for this date</p>
+                <p style="font-size: 13px; margin-top: 8px;">Tasks you create appear from their creation date forward.</p>
             </div>
         </div>
 

@@ -83,7 +83,7 @@ def send_daily_reminders():
         return
     
     from models import User, Task
-    from app import db
+    from models import db
     
     today = date.today()
     now = datetime.now().time()
@@ -104,7 +104,10 @@ def send_daily_reminders():
             continue
 
         # Get user's tasks
-        tasks = Task.query.filter_by(user_id=user.id).all()
+        tasks = Task.query.filter_by(
+            user_id=user.id,
+            deleted_at=None
+        ).all()
         if not tasks:
             continue
 
@@ -174,7 +177,12 @@ def send_email(to_email, subject, body):
     msg["Subject"] = subject
     msg.set_content(body)
 
-    with smtplib.SMTP(mail_server, mail_port) as server:
-        server.starttls()
-        server.login(mail_username, mail_password)
-        server.send_message(msg)
+    if mail_port == 465:
+        with smtplib.SMTP_SSL(mail_server, mail_port) as server:
+            server.login(mail_username, mail_password)
+            server.send_message(msg)
+    else:
+        with smtplib.SMTP(mail_server, mail_port) as server:
+            server.starttls()
+            server.login(mail_username, mail_password)
+            server.send_message(msg)
