@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 
 from flask import (
     Flask, render_template, redirect, url_for,
-    request, send_file, flash, abort
+    request, send_file, flash, abort, jsonify
 )
 from flask_login import (
     LoginManager, login_user, login_required,
@@ -610,7 +610,43 @@ def delete_task_from_dashboard():
     return redirect(url_for("dashboard", date=date_str))
 
 
-
+@app.route("/history/delete-task-from-date", methods=["POST"])
+@login_required
+def delete_task_from_history():
+    """Delete task from ONE specific date only."""
+    from datetime import datetime, date
+    
+    task_id = request.form.get("task_id", type=int)
+    date_str = request.form.get("date")
+    
+    if not task_id or not date_str:
+        flash("Invalid request")
+        return redirect(url_for("dashboard"))
+    
+    try:
+        deletion_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date")
+        return redirect(url_for("dashboard"))
+    
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first()
+    if not task:
+        flash("Task not found")
+        return redirect(url_for("dashboard"))
+    
+    # Delete ONLY this date (not onward!)
+    daily_task = DailyTask.query.filter_by(
+        task_id=task_id,
+        user_id=current_user.id,
+        date=deletion_date
+    ).first()
+    
+    if daily_task:
+        db.session.delete(daily_task)
+        db.session.commit()
+        flash(f"Task '{task.title}' removed from {deletion_date.strftime('%B %d, %Y')}.")
+    
+    return redirect(url_for("dashboard", date=date_str))
 
 # ====================
 # Category Management Routes

@@ -66,36 +66,3 @@ def ensure_daily_tasks_range(user_id, start_date, end_date):
         current += timedelta(days=1)
 
 
-# def get_daily_tasks_grouped_by_category(user_id, selected_date):
-#     """
-#     Get daily tasks for a date, grouped by category.
-    
-#     Uses snapshot data from DailyTask records.
-    
-#     Args:
-#         user_id (int): User's database ID
-#         selected_date (date): Date to get tasks for
-        
-#     Returns:
-#         dict: {category_name: [DailyTask objects]}
-#     """
-#     # Ensure tasks exist for this date
-#     ensure_daily_tasks(user_id, selected_date)
-    
-#     # Get all daily tasks for this date
-#     daily_tasks = DailyTask.query.filter_by(
-#         user_id=user_id,
-#         date=selected_date
-#     ).order_by(DailyTask.category_name, DailyTask.task_title).all()
-    
-#     # Group by category name (from snapshot)
-#     grouped = {}
-#     for dt in daily_tasks:
-#         category = dt.category_name
-#         if category not in grouped:
-#             grouped[category] = []
-#         grouped[category].append(dt)
-    
-#     return grouped
-
-

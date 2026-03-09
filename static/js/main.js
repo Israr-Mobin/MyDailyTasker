@@ -431,15 +431,18 @@ function saveHistoryChanges() {
     form.submit();
 }
 
-// Delete task from specific date
 function deleteTaskFromDate(taskId, dateStr, taskTitle) {
-    if (!confirm(`Remove "${taskTitle}" from this date only?\n\nThis will not affect other dates.`)) {
+    if (!confirm(`Remove "${taskTitle}" from this date only?`)) {
         return;
     }
     
+    // ✨ ADD THIS LINE - Close the modal before submitting
+    closeAllModals();
+    
+    // Rest stays the same
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = '/task/delete-from-date';
+    form.action = '/history/delete-task-from-date';
     
     const taskInput = document.createElement('input');
     taskInput.type = 'hidden';
