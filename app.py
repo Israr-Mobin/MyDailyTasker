@@ -426,7 +426,6 @@ def update_daily_tasks():
     Update daily task completion status or delete tasks.
     Handles both marking tasks as complete and deleting tasks.
     """
-    from datetime import datetime
     
     selected_date_str = request.form.get("selected_date")
     selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
@@ -499,10 +498,6 @@ def view_history_date(date_str):
     """
     View a specific historical date via History modal.
     """
-    from datetime import datetime, date
-    from models import DailyTask
-    from utils.tasks import ensure_daily_tasks
-    
     try:
         selected_date = datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
@@ -531,8 +526,6 @@ def view_history_date(date_str):
             tasks_by_category_name[cat_name] = []
         tasks_by_category_name[cat_name].append(dt)
     
-    from flask import jsonify
-    
     return jsonify({
         'date': selected_date.strftime('%Y-%m-%d'),
         'date_display': selected_date.strftime('%B %d, %Y'),
@@ -557,7 +550,6 @@ def view_history_date(date_str):
 @login_required
 def delete_task_from_dashboard():
     """Delete a task from the dashboard."""
-    from datetime import datetime, date
     
     task_id = request.form.get("task_id", type=int)
     date_str = request.form.get("date")
@@ -614,7 +606,6 @@ def delete_task_from_dashboard():
 @login_required
 def delete_task_from_history():
     """Delete task from ONE specific date only."""
-    from datetime import datetime, date
     
     task_id = request.form.get("task_id", type=int)
     date_str = request.form.get("date")
