@@ -1077,6 +1077,9 @@ def internal_error(error):
 with app.app_context():
     db.create_all()
 
+# # Start background scheduler (runs even with gunicorn)
+start_scheduler()
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
