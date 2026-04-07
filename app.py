@@ -1068,6 +1068,18 @@ def internal_error(error):
     flash("An error occurred. Please try again.")
     return redirect(url_for("dashboard"))
 
+@app.route("/test-email")
+def test_email():
+    try:
+        from utils.email import send_email
+        send_email(
+            to_email="mydailytaster.app@gmail.com",
+            subject="Test from MyDailyTasker",
+            body="If you see this, email is working!"
+        )
+        return "✅ Email sent successfully!"
+    except Exception as e:
+        return f"❌ Email failed: {str(e)}"
 
 # ====================
 # Application Startup
@@ -1077,7 +1089,7 @@ def internal_error(error):
 with app.app_context():
     db.create_all()
 
-# # Start background scheduler (runs even with gunicorn)
+# Start background scheduler (runs even with gunicorn)
 start_scheduler()
 
 if __name__ == "__main__":
