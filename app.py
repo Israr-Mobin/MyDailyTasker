@@ -207,9 +207,10 @@ scheduler.add_job(
 
 
 def start_scheduler():
-    """Start the scheduler only in the main process (not reloader)."""
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+    """Start the scheduler only once, not in every gunicorn worker."""
+    if not scheduler.running:
         scheduler.start()
+        print("✅ Scheduler started")
 
 
 # ====================
