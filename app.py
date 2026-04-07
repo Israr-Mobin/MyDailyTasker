@@ -1068,18 +1068,6 @@ def internal_error(error):
     flash("An error occurred. Please try again.")
     return redirect(url_for("dashboard"))
 
-@app.route("/test-email")
-def test_email():
-    try:
-        from utils.email import send_email
-        send_email(
-            to_email="mydailytasker.app@gmail.com",
-            subject="Test from MyDailyTasker",
-            body="If you see this, email is working!"
-        )
-        return "✅ Email sent successfully!"
-    except Exception as e:
-        return f"❌ Email failed: {str(e)}"
 
 # ====================
 # Application Startup
