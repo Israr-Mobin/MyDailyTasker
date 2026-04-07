@@ -1073,7 +1073,7 @@ def test_email():
     try:
         from utils.email import send_email
         send_email(
-            to_email="mydailytaster.app@gmail.com",
+            to_email="mydailytasker.app@gmail.com",
             subject="Test from MyDailyTasker",
             body="If you see this, email is working!"
         )
